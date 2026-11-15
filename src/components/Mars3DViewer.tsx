@@ -41,7 +41,7 @@ export const Mars3DViewer: React.FC<Mars3DViewerProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // View mode: 'tactical' (high-res surface DEM) vs 'globe' (planetary 3D sphere)
-  const [viewMode, setViewMode] = useState<'tactical' | 'globe'>('tactical');
+  const [viewMode, setViewMode] = useState<'tactical' | 'globe'>('globe');
 
   // Three.js References
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -85,7 +85,7 @@ export const Mars3DViewer: React.FC<Mars3DViewerProps> = ({
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(48, width / height, 0.5, 2500);
-    camera.position.set(0, 50, 70);
+    camera.position.set(0, 15, 60);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({
@@ -104,7 +104,7 @@ export const Mars3DViewer: React.FC<Mars3DViewerProps> = ({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
-    controls.maxPolarAngle = Math.PI / 2 - 0.05;
+    controls.maxPolarAngle = Math.PI;
     controls.minDistance = 6;
     controls.maxDistance = 250;
     controls.target.set(0, 0, 0);
@@ -324,6 +324,20 @@ export const Mars3DViewer: React.FC<Mars3DViewerProps> = ({
 
     const globeMesh = new THREE.Mesh(globeGeo, globeMat);
     group.add(globeMesh);
+
+    // Load Authentic NASA Mars Viking Map Texture
+    const texLoader = new THREE.TextureLoader();
+    texLoader.load('/assets/mars_viking_color.jpg', (tex) => {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
+      const textureMaterial = new THREE.MeshStandardMaterial({
+        map: tex,
+        roughness: 0.88,
+        metalness: 0.1
+      });
+      globeMesh.material = textureMaterial;
+      globeMesh.material.needsUpdate = true;
+    });
 
     // Add Landing Site Pins onto Globe
     const landingSites: { name: string; sector: SectorId; lat: number; lon: number }[] = [

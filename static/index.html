@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOL NAV // 3D Martian Surface EVA & Planetary GIS Navigation</title>
+  
+  <!-- Modern Aerospace Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  
+  <!-- Core Styling -->
+  <link rel="stylesheet" href="/static/styles.css">
+  
+  <!-- Three.js & Controls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="aerospace-theme">
+
+  <!-- HUD Grid Overlay -->
+  <div class="hud-scanlines"></div>
+  <div class="hud-vignette"></div>
+
+  <!-- Top Mission Control Header -->
+  <header class="mission-header">
+    <div class="header-left">
+      <div class="mission-branding">
+        <div class="logo-glyph">⬡</div>
+        <div class="logo-text">
+          <h1>SOL NAV <span class="badge-eva">3D MARS</span></h1>
+          <p class="subtitle">MARTIAN SURFACE & PLANETARY GIS EXPLORER</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Central Mode Switch, Basemap & Quick-Target Presets -->
+    <div class="header-center">
+      <!-- 3D Globe vs Full Map -->
+      <div class="view-mode-selector">
+        <button id="btn-view-3d" class="btn-mode active" title="3D Interactive Globe">🌐 3D GLOBE</button>
+        <button id="btn-view-2d" class="btn-mode" title="Full Mars 2D Equirectangular Map">🗺️ FULL MARS MAP</button>
+      </div>
+
+      <!-- Basemap Texture Selector -->
+      <div class="basemap-header-group">
+        <button class="btn-basemap btn-basemap-hdr active" data-map="viking" title="NASA Viking MDIM 2.1 True Color">VIKING COLOR</button>
+        <button class="btn-basemap btn-basemap-hdr" data-map="mola" title="MOLA Hypsometric Elevation Rainbow">MOLA ELEVATION</button>
+        <button class="btn-basemap btn-basemap-hdr" data-map="themis" title="THEMIS IR Shaded Relief">THEMIS RELIEF</button>
+      </div>
+
+      <!-- Quick Fly-To Presets -->
+      <div class="target-quick-nav">
+        <span class="nav-label">FLY TO:</span>
+        <button class="btn-preset active" data-preset="global">FULL PLANET</button>
+        <button class="btn-preset" data-preset="olympus">OLYMPUS MONS</button>
+        <button class="btn-preset" data-preset="valles">VALLES MARINERIS</button>
+        <button class="btn-preset" data-preset="jezero">JEZERO DELTA</button>
+        <button class="btn-preset" data-preset="gale">GALE CRATER</button>
+      </div>
+    </div>
+
+    <!-- Header Actions -->
+    <div class="header-right">
+      <div class="tool-toggles">
+        <button id="btn-toggle-tools" class="hud-btn" title="Toggle Scientific USGS GIS & Traverse Sidebars (Keyboard: H)">
+          <span class="btn-icon">🛠️</span> MISSION TOOLS
+        </button>
+        <button id="btn-toggle-sun" class="hud-btn" title="Toggle Sun Angle Simulator">
+          <span class="btn-icon">☀️</span> SUN SIM
+        </button>
+        <button id="btn-toggle-measure" class="hud-btn" title="Measure Distance & Crater Diameter">
+          <span class="btn-icon">📏</span> MEASURE
+        </button>
+        <button id="btn-reset-cam" class="hud-btn" title="Reset Camera View to Full Planet">
+          <span class="btn-icon">↺</span> RESET
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Viewport Layout -->
+  <main class="mission-viewport">
+    
+    <!-- 3D Globe WebGL Container -->
+    <div id="webgl-container"></div>
+
+    <!-- Full 2D Mars Global Cylindrical / Equirectangular Map Container -->
+    <div id="flat-map-container" class="flat-map-viewport hidden">
+      <div class="flat-map-inner">
+        <canvas id="flat-map-canvas"></canvas>
+        <div id="flat-map-overlay" class="flat-map-overlay"></div>
+      </div>
+      <div class="flat-map-controls">
+        <span class="fmc-tag">PROJECTION: SIMPLE CYLINDRICAL (EQUIRECTANGULAR IAU MARS)</span>
+        <span class="fmc-tag">SPAN: 0° TO 360° E | -90° TO +90° N</span>
+      </div>
+    </div>
+
+    <!-- Global POI & Feature Search Bar -->
+    <div class="hud-search-bar">
+      <div class="search-input-wrapper">
+        <span class="search-glyph">🔍</span>
+        <input type="text" id="global-search-input" placeholder="Search craters, landmarks, hazards, rovers, minerals..." autocomplete="off">
+        <button id="btn-clear-search" class="btn-clear-search hidden">✕</button>
+      </div>
+      <div id="search-results-dropdown" class="search-dropdown hidden"></div>
+    </div>
+
+    <!-- Turn-by-Turn GPS Navigation HUD (Active Navigation Mode) -->
+    <div id="navigation-hud-bar" class="nav-hud-bar hidden">
+      <div class="nav-maneuver-icon" id="nav-maneuver-icon">⬆️</div>
+      <div class="nav-instructions">
+        <div class="nav-instruction-main" id="nav-instruction-text">Head NE (045°) towards Mission Target</div>
+        <div class="nav-instruction-sub" id="nav-instruction-sub">Next maneuver in 1.4 km • Gentle regolith floor (4° slope)</div>
+      </div>
+      <div class="nav-telemetry-metrics">
+        <div class="ntm-item">
+          <span class="ntm-label">REMAINING</span>
+          <span class="ntm-val" id="nav-remaining-dist">12.4 km</span>
+        </div>
+        <div class="ntm-item">
+          <span class="ntm-label">ETA</span>
+          <span class="ntm-val" id="nav-eta">3h 52m</span>
+        </div>
+        <div class="ntm-item">
+          <span class="ntm-label">SPEED</span>
+          <span class="ntm-val" id="nav-speed">18 km/h</span>
+        </div>
+        <div class="ntm-item">
+          <span class="ntm-label">HEADING</span>
+          <span class="ntm-val" id="nav-heading">045° NE</span>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <button id="btn-toggle-voice" class="btn-nav-action active" title="Toggle Voice Navigation Prompts">🔊 VOICE</button>
+        <button id="btn-toggle-chase" class="btn-nav-action" title="Toggle Vehicle Chase Cam">🎥 CHASE</button>
+        <button id="btn-end-navigation" class="btn-nav-action btn-danger" title="Stop Navigation">✕ EXIT</button>
+      </div>
+    </div>
+
+    <!-- Sleek HUD Telemetry & Coordinates Tracker (Bottom Left) -->
+    <div class="hud-coords-tracker" id="coords-tracker">
+      <div class="coords-line">LAT: <span id="hover-lat">0.000° N</span> | LON: <span id="hover-lon">0.000° E</span></div>
+      <div class="coords-line">MOLA ELEVATION: <span id="hover-elevation">-1,200 m</span></div>
+    </div>
+
+    <!-- 3D Navigation Controls Hint (Bottom Right) -->
+    <div class="hud-controls-hint">
+      <span>ORBIT: <strong>L-CLICK DRAG</strong> | ZOOM: <strong>WHEEL</strong> | PAN: <strong>R-CLICK</strong></span>
+    </div>
+
+    <!-- Edge Toggle Tabs (Slide out drawers when clicked) -->
+    <div class="sidebar-tab-left" id="btn-tab-gis" title="Open USGS Planetary GIS Hub">◈ USGS GIS</div>
+    <div class="sidebar-tab-right" id="btn-tab-traverse" title="Open Martian Traverse Planner">▲ TRAVERSE</div>
+
+    <!-- Measurement Active Notice Banner -->
+    <div id="measure-banner" class="measure-banner hidden">
+      <div class="measure-indicator">⌖ DISTANCE & ELEVATION TOOL ACTIVE</div>
+      <div class="measure-instructions">Click 2 points on the Martian surface to calculate Great-Circle distance & crater elevation profile.</div>
+      <div id="measure-results" class="measure-results hidden">
+        <span>DISTANCE: <strong id="measure-dist-km">0.00 km</strong></span>
+        <span>ELEVATION DELTA: <strong id="measure-elev-delta">0 m</strong></span>
+        <button id="btn-clear-measure" class="btn-tiny">RESET</button>
+      </div>
+    </div>
+
+    <!-- Floating Sun Angle Simulator Panel -->
+    <div id="sun-simulator-panel" class="floating-panel sun-panel hidden">
+      <div class="panel-header">
+        <h3><span class="icon">☀️</span> SUN ANGLE & SHADOW SIMULATOR</h3>
+        <button class="panel-close" id="btn-close-sun">×</button>
+      </div>
+      <div class="panel-body">
+        <div class="control-group">
+          <div class="control-label-row">
+            <span>LOCAL TRUE SOLAR TIME (LTST)</span>
+            <strong id="sun-time-display">12:00 (Solar Noon)</strong>
+          </div>
+          <input type="range" id="sun-time-slider" min="0" max="24" step="0.25" value="12">
+        </div>
+        <div class="sun-telemetry-grid">
+          <div class="sun-cell">
+            <span class="sc-label">SOLAR ELEVATION</span>
+            <span class="sc-val" id="sun-elev-val">64.8°</span>
+          </div>
+          <div class="sun-cell">
+            <span class="sc-label">AZIMUTH</span>
+            <span class="sc-val" id="sun-azim-val">180.0°</span>
+          </div>
+          <div class="sun-cell">
+            <span class="sc-label">SUBSOLAR LAT</span>
+            <span class="sc-val" id="sun-sublat-val">-24.8°</span>
+          </div>
+          <div class="sun-cell">
+            <span class="sc-label">ILLUMINATION</span>
+            <span class="sc-val state-day" id="sun-state-val">DIRECT SUN</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LEFT SIDEBAR: USGS Planetary GIS Scientific Layers -->
+    <aside class="sidebar sidebar-left collapsed" id="sidebar-gis">
+      <div class="sidebar-header-bar">
+        <div class="sidebar-title">
+          <span class="title-glyph">◈</span>
+          <h2>USGS MARS GIS HUB</h2>
+        </div>
+        <button class="btn-sidebar-close" id="btn-close-gis" title="Close Sidebar">✕</button>
+      </div>
+      <div class="sidebar-content">
+
+        <!-- Section: Mars Trek Global Basemap Mode -->
+        <div class="layer-section">
+          <div class="section-header">
+            <h4>MARS TREK BASEMAP LAYER</h4>
+          </div>
+          <div class="basemap-button-group">
+            <button class="btn-basemap active" data-map="viking">VIKING MDIM2.1 (TRUE COLOR)</button>
+            <button class="btn-basemap" data-map="mola">MOLA HYPSOMETRIC (DEM COLOR)</button>
+            <button class="btn-basemap" data-map="themis">THEMIS IR (SHADED RELIEF)</button>
+          </div>
+        </div>
+
+        <!-- Section: Geologic Units -->
+        <div class="layer-section">
+          <div class="section-header">
+            <h4>GEOLOGIC STRATIGRAPHY (Tanaka 2014)</h4>
+            <label class="switch">
+              <input type="checkbox" id="layer-geology-toggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="legend-list" id="geology-legend-container">
+            <!-- Dynamically populated from API -->
+          </div>
+        </div>
+
+        <!-- Section: Mineralogy Overlays -->
+        <div class="layer-section">
+          <div class="section-header">
+            <h4>MINERALOGICAL SPECTROMETRY</h4>
+            <label class="switch">
+              <input type="checkbox" id="layer-mineralogy-toggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="legend-list" id="mineralogy-legend-container">
+            <!-- Dynamically populated from API -->
+          </div>
+        </div>
+
+        <!-- Section: Planetary Nomenclature -->
+        <div class="layer-section">
+          <div class="section-header">
+            <h4>IAU NOMENCLATURE & BEACONS</h4>
+            <label class="switch">
+              <input type="checkbox" id="layer-nomenclature-toggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <p class="section-hint">Displays calibrated 3D beacons at major Martian landmarks.</p>
+          <div class="quick-landmarks-list" id="landmarks-container">
+            <!-- Populated via API -->
+          </div>
+        </div>
+
+        <!-- Section: Rover Ground Sites -->
+        <div class="layer-section">
+          <div class="section-header">
+            <h4>GROUND-TRUTH INSPECTION SITES</h4>
+            <label class="switch">
+              <input type="checkbox" id="layer-ground-truth-toggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <p class="section-hint">Click glowing rover pins to inspect raw high-res surface captures.</p>
+          <div class="rover-pins-list" id="rover-pins-container">
+            <!-- Populated via API -->
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- RIGHT SIDEBAR: Curiosity / Perseverance Traverse Planner -->
+    <aside class="sidebar sidebar-right collapsed" id="sidebar-traverse">
+      <div class="sidebar-header-bar">
+        <div class="sidebar-title">
+          <span class="title-glyph">▲</span>
+          <h2>TRAVERSE PATH PLANNER</h2>
+        </div>
+        <button class="btn-sidebar-close" id="btn-close-traverse" title="Close Sidebar">✕</button>
+      </div>
+      <div class="sidebar-content">
+
+        <!-- Traverse Mode & Mission Presets -->
+        <div class="planner-controls">
+          <label class="input-label">MISSION TRAVERSE PROFILE:</label>
+          <select id="traverse-preset-select" class="hud-select">
+            <option value="curiosity">Curiosity (MSL) - Mount Sharp Ascent</option>
+            <option value="perseverance">Perseverance (M2020) - Jezero Delta Scarp</option>
+            <option value="olympus_eva">Astronaut EVA - Olympus Mons Caldera Traverse</option>
+            <option value="custom">Custom EVA Waypoints</option>
+          </select>
+        </div>
+
+        <!-- Waypoint Sequence Manager -->
+        <div class="waypoint-manager">
+          <div class="wm-header">
+            <h4>WAYPOINT SEQUENCE</h4>
+            <button id="btn-add-waypoint" class="btn-tiny">+ ADD POINT</button>
+          </div>
+          <div class="waypoint-list" id="waypoint-list-container">
+            <!-- Populated dynamically -->
+          </div>
+          <button id="btn-compute-traverse" class="btn-primary-action">
+            ⚡ COMPUTE LEAST-ENERGY TRAVERSE
+          </button>
+          <button id="btn-optimize-safe-route" class="btn-safe-action">
+            🛡️ AUTONOMOUS SAFE ROUTE (AVOID HAZARDS)
+          </button>
+          <button id="btn-start-navigation" class="btn-nav-start-action">
+            🧭 START TURN-BY-TURN NAVIGATION
+          </button>
+          <div class="export-button-row">
+            <button id="btn-export-gpx" class="btn-export" title="Export Route as standard GPS GPX track">📥 EXPORT GPX</button>
+            <button id="btn-export-geojson" class="btn-export" title="Export Route as standard GeoJSON">📥 EXPORT GEOJSON</button>
+          </div>
+        </div>
+
+        <!-- Uneven Terrain & Hazard Detection Alert Banner -->
+        <div id="hazard-alert-banner" class="hazard-alert-card hidden">
+          <div class="hac-header">
+            <span class="hac-icon">⚠️</span>
+            <div class="hac-text">
+              <h5 id="hac-title">HAZARDOUS TERRAIN DETECTED</h5>
+              <p id="hac-desc">Route crosses sharp ventifacts and steep slope grades.</p>
+            </div>
+          </div>
+          <div class="hac-stats">
+            <span class="hac-stat">SAFETY GAIN: <strong id="hac-safety-score">+92%</strong></span>
+            <span class="hac-stat">WHEEL DAMAGE: <strong id="hac-wheel-risk" class="risk-low">MINIMAL</strong></span>
+          </div>
+          <div class="route-view-toggle">
+            <button id="btn-view-safe" class="btn-route-tab active">🛡️ SAFE ROUTE</button>
+            <button id="btn-view-direct" class="btn-route-tab">🔴 DIRECT ROUTE</button>
+          </div>
+        </div>
+
+        <!-- Elevation Profile Graph -->
+        <div class="elevation-profile-card">
+          <div class="ep-header">
+            <h4>CROSS-SECTIONAL ELEVATION PROFILE</h4>
+            <div class="hazard-indicators">
+              <span class="hz-tag hz-safe">■ &lt;8° SAFE</span>
+              <span class="hz-tag hz-caution">■ 8-15° CAUTION</span>
+              <span class="hz-tag hz-critical">■ &gt;15° CRITICAL HAZARD</span>
+            </div>
+          </div>
+          
+          <div class="chart-wrapper">
+            <canvas id="elevation-canvas" width="380" height="150"></canvas>
+            <div id="elevation-tooltip" class="chart-tooltip hidden"></div>
+          </div>
+        </div>
+
+        <!-- Traverse Telemetry Metrics -->
+        <div class="traverse-telemetry-grid">
+          <div class="metric-cell">
+            <span class="m-label">TOTAL DISTANCE</span>
+            <span class="m-val" id="metric-distance">0.00 km</span>
+          </div>
+          <div class="metric-cell">
+            <span class="m-label">MAX SLOPE GRADE</span>
+            <span class="m-val" id="metric-max-slope">0.0°</span>
+          </div>
+          <div class="metric-cell">
+            <span class="m-label">TOTAL ELEV GAIN</span>
+            <span class="m-val" id="metric-climb">+0 m</span>
+          </div>
+          <div class="metric-cell">
+            <span class="m-label">ENERGY EXPENDITURE</span>
+            <span class="m-val" id="metric-energy">0.0 kWh</span>
+          </div>
+          <div class="metric-cell span-2">
+            <span class="m-label">SLOPE HAZARDS DETECTED</span>
+            <span class="m-val val-hazard" id="metric-hazards">0 Critical (>15°)</span>
+          </div>
+          <div class="metric-cell span-2">
+            <span class="m-label">ESTIMATED EVA DURATION</span>
+            <span class="m-val" id="metric-duration">0.0 hrs (Walking)</span>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- BOTTOM BAR: NASA Worldview Time-Series Controller (Hidden by default for clean view) -->
+    <div class="bottom-timeline-controller hidden" id="worldview-controller">
+      <div class="timeline-header">
+        <div class="tl-title">
+          <span class="icon">◷</span>
+          <strong>NASA WORLDVIEW // TEMPORAL ATMOSPHERIC DYNAMICS</strong>
+        </div>
+        <div class="tl-metrics">
+          <span class="tl-metric-badge">ATMOSPHERIC OPACITY (&tau;): <strong id="tl-tau">0.32</strong></span>
+          <span class="tl-metric-badge">SURFACE PRESSURE: <strong id="tl-pressure">7.4 mbar</strong></span>
+          <span class="tl-metric-badge" id="dust-alert-badge">DUST CONDITION: NOMINAL</span>
+          <span class="tl-metric-badge">ORBITAL PASS: <strong id="tl-satellite">MRO (Electra)</strong></span>
+        </div>
+      </div>
+
+      <div class="timeline-slider-row">
+        <span class="sol-bound">SOL 50 (Ls 15°)</span>
+        <div class="slider-track-container">
+          <input type="range" id="worldview-slider" min="0" max="7" step="1" value="0">
+          <div class="slider-storm-zone" title="Dust Storm Window (Perihelion)"></div>
+        </div>
+        <span class="sol-bound">SOL 720 (Ls 355°)</span>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL: Perseverance Ground-Truth Surface Inspection HUD -->
+  <div id="ground-truth-modal" class="hud-modal hidden">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span class="modal-icon">📷</span>
+          <h3>GROUND-TRUTH SURFACE INSPECTION HUD</h3>
+          <span class="rover-tag" id="modal-rover-name">PERSEVERANCE (MARS 2020)</span>
+        </div>
+        <button class="modal-close" id="btn-close-modal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-image-col">
+          <div class="raw-image-frame">
+            <img id="modal-image" src="" alt="Mars Ground Surface Raw Capture">
+            <div class="image-reticle"></div>
+            <div class="fov-tag" id="modal-fov">FOV: 45.0° | AZIMUTH: 284.5°</div>
+          </div>
+          <div class="image-caption" id="modal-target-title">Target: Kodiak Butte Delta Scarp</div>
+        </div>
+
+        <div class="modal-telemetry-col">
+          <div class="telemetry-card">
+            <h4>ACQUISITION TELEMETRY</h4>
+            <div class="telem-row">
+              <span>SOL / EARTH DATE:</span>
+              <strong id="modal-sol-date">SOL 420 (2022-04-24)</strong>
+            </div>
+            <div class="telem-row">
+              <span>CAMERA INSTRUMENT:</span>
+              <strong id="modal-instrument">Mastcam-Z Stereo Left</strong>
+            </div>
+            <div class="telem-row">
+              <span>COORDINATES:</span>
+              <strong id="modal-coords">18.4520° N, 77.4120° E</strong>
+            </div>
+            <div class="telem-row">
+              <span>DATUM ELEVATION:</span>
+              <strong id="modal-elevation">-2,540 m</strong>
+            </div>
+          </div>
+
+          <div class="telemetry-card">
+            <h4>GEOLOGICAL & STRATIGRAPHIC INTERPRETATION</h4>
+            <p id="modal-description" class="geology-desc">
+              Cross-sectional stratification showing topset and dipping foreset delta beds proving active river sedimentation into ancient lake.
+            </p>
+          </div>
+
+          <div class="telemetry-card">
+            <h4>SPECTROMETER ELEMENTAL COMPOSITION (CHEMCAM / SUPERCAM)</h4>
+            <div class="spectrometer-grid" id="modal-composition-grid">
+              <!-- Dynamically rendered -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Earth vs Mars Planetary & Geospatial Scale Extension -->
+  <div id="earth-extension-modal" class="hud-modal hidden">
+    <div class="modal-backdrop" id="earth-modal-backdrop"></div>
+    <div class="modal-dialog earth-modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span class="modal-icon">🌍</span>
+          <h3>EARTH VS MARS // GEOSPATIAL SCALE & TOPOGRAPHY EXTENSION</h3>
+          <span class="rover-tag">WGS84 VS IAU AREOID</span>
+        </div>
+        <button class="modal-close" id="btn-close-earth-modal">✕</button>
+      </div>
+      <div class="modal-body earth-modal-body">
+        <div class="earth-intro-banner">
+          Compare planetary geology, volcanic dimensions, and rift canyons between Earth and Mars. All data standardized across WGS84 and IAU/IAG Areoid datums.
+        </div>
+        <div id="earth-comparisons-container" class="earth-comparison-grid">
+          <!-- Populated dynamically via /api/earth-compare -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Application Script -->
+  <script src="/static/app.js"></script>
+</body>
+</html>

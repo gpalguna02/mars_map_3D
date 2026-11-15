@@ -77,8 +77,8 @@ export const App: React.FC = () => {
   // Astronaut Manual Modal
   const [showBriefing, setShowBriefing] = useState(false);
 
-  // Mission Control HUD panels: visible by default (can be toggled with 'H' or TopNav button)
-  const [showHud, setShowHud] = useState(true);
+  // Mission Control HUD panels: hidden by default for clean full-screen 3D Mars view (toggle with 'H' or TopNav button)
+  const [showHud, setShowHud] = useState(false);
 
   // Keyboard shortcut: Press 'H' to toggle HUD panels
   useEffect(() => {
