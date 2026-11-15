@@ -67,6 +67,12 @@
         <button id="btn-toggle-measure" class="hud-btn" title="Measure Distance & Crater Diameter">
           <span class="btn-icon">📏</span> Measure
         </button>
+        <button id="btn-toggle-earth" class="hud-btn" title="Compare Mars Topography & Scale with Earth (WGS84)">
+          <span class="btn-icon">🌍</span> Compare
+        </button>
+        <button id="btn-toggle-timeline" class="hud-btn" title="Toggle NASA Worldview Temporal Dust & Atmosphere Timeline">
+          <span class="btn-icon">⏱️</span> Timeline
+        </button>
         <button id="btn-reset-cam" class="hud-btn btn-icon-only" title="Reset Camera View to Full Planet">
           <span class="btn-icon">↺</span>
         </button>
@@ -216,6 +222,18 @@
             <button class="btn-basemap" data-map="mola">MOLA HYPSOMETRIC (DEM COLOR)</button>
             <button class="btn-basemap" data-map="themis">THEMIS IR (SHADED RELIEF)</button>
           </div>
+        </div>
+
+        <!-- Section: NASA Surface Hazard Zones -->
+        <div class="layer-section">
+          <div class="section-header">
+            <h4>NASA HiRISE HAZARD ZONES</h4>
+            <label class="switch">
+              <input type="checkbox" id="layer-hazards-toggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <p class="section-hint">Displays steep slope scarps, boulder fields, and dust storm zones.</p>
         </div>
 
         <!-- Section: Geologic Units -->

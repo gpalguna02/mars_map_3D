@@ -658,12 +658,21 @@ function setupEventListeners() {
   });
 
   // Hazard Layer Toggle
-  const btnHazards = document.getElementById('btn-toggle-hazards');
-  if (btnHazards) {
-    btnHazards.addEventListener('click', () => {
-      state.layers.hazards = !state.layers.hazards;
-      btnHazards.classList.toggle('active', state.layers.hazards);
-      hazardsGroup.visible = state.layers.hazards;
+  const hazardToggle = document.getElementById('layer-hazards-toggle');
+  if (hazardToggle) {
+    hazardToggle.addEventListener('change', (e) => {
+      state.layers.hazards = e.target.checked;
+      hazardsGroup.visible = e.target.checked;
+    });
+  }
+
+  // NASA Worldview Timeline Toggle
+  const btnTimeline = document.getElementById('btn-toggle-timeline');
+  const wvController = document.getElementById('worldview-controller');
+  if (btnTimeline && wvController) {
+    btnTimeline.addEventListener('click', () => {
+      wvController.classList.toggle('hidden');
+      btnTimeline.classList.toggle('active', !wvController.classList.contains('hidden'));
     });
   }
 
@@ -2310,3 +2319,18 @@ function selectSearchResult(lat, lon) {
   document.getElementById('hover-lon').textContent = `${lon.toFixed(3)}° E`;
   queryElevationDebounced(lat, lon);
 }
+
+// Global window assignments for dynamic HTML onclick callbacks
+window.removeWaypoint = removeWaypoint;
+window.openPhotoModal = openPhotoModal;
+window.openEarthModal = openEarthModal;
+window.closeEarthModal = closeEarthModal;
+window.closeModal = closeModal;
+window.selectSearchResult = selectSearchResult;
+window.flyToCoordinates = flyToCoordinates;
+window.flyToPreset = flyToPreset;
+window.startTurnByTurnNavigation = startTurnByTurnNavigation;
+window.stopNavigation = stopNavigation;
+window.exportRouteGpx = exportRouteGpx;
+window.exportRouteGeoJson = exportRouteGeoJson;
+window.optimizeSafeTraverseRoute = optimizeSafeTraverseRoute;
