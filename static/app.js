@@ -40,7 +40,7 @@ const state = {
 let scene, camera, renderer, controls;
 let marsGlobe, atmosphereMesh, sunLight, ambientLight, dustCloudMesh;
 let raycaster, mouse;
-let landmarkPinsGroup, roverPinsGroup, traverseTrackGroup, measureTrackGroup, hazardsGroup;
+let landmarkPinsGroup, roverPinsGroup, traverseTrackGroup, measureTrackGroup, hazardsGroup, liveExpeditionsGroup;
 let isAnimatingCamera = false;
 let targetCameraPos = null, targetLookAt = null;
 
@@ -108,12 +108,16 @@ function initThreeJS() {
   traverseTrackGroup = new THREE.Group();
   measureTrackGroup = new THREE.Group();
   hazardsGroup = new THREE.Group();
+  liveExpeditionsGroup = new THREE.Group();
 
   scene.add(landmarkPinsGroup);
   scene.add(roverPinsGroup);
   scene.add(traverseTrackGroup);
   scene.add(measureTrackGroup);
   scene.add(hazardsGroup);
+  scene.add(liveExpeditionsGroup);
+
+  initLiveExpeditions();
 
   // Starfield Background
   createStarfield();
@@ -888,6 +892,147 @@ function renderRoverPins() {
   });
 }
 
+// Live Moving Martian Expeditions (Astronauts Walking & Rovers Exploring in Real Time)
+const liveExpeditionTeams = [
+  {
+    id: 'eva-alpha',
+    name: '👨‍🚀 CDR Vance & Dr Chen (EVA-1)',
+    status: 'Walking traverse • Belva Rim',
+    color: 0x00e5ff,
+    coords: [
+      { lat: 18.38, lon: 77.58 },
+      { lat: 18.45, lon: 77.50 },
+      { lat: 18.52, lon: 77.38 },
+      { lat: 18.47, lon: 77.26 },
+      { lat: 18.38, lon: 77.58 }
+    ],
+    progress: 0.15,
+    speed: 0.0006
+  },
+  {
+    id: 'curiosity-team',
+    name: '👩‍🚀 Curiosity Ground Crew',
+    status: 'Sampling Murray Buttes • Gale',
+    color: 0xff6d00,
+    coords: [
+      { lat: -4.59, lon: 137.44 },
+      { lat: -4.66, lon: 137.38 },
+      { lat: -4.75, lon: 137.28 },
+      { lat: -4.68, lon: 137.35 },
+      { lat: -4.59, lon: 137.44 }
+    ],
+    progress: 0.55,
+    speed: 0.00045
+  },
+  {
+    id: 'olympus-survey',
+    name: '🚀 Caldera High-Altitude Unit',
+    status: 'Surveying Caldera Rim • 21km Elev',
+    color: 0x10b981,
+    coords: [
+      { lat: 18.20, lon: 226.10 },
+      { lat: 18.50, lon: 226.25 },
+      { lat: 18.85, lon: 226.40 },
+      { lat: 18.60, lon: 226.20 },
+      { lat: 18.20, lon: 226.10 }
+    ],
+    progress: 0.8,
+    speed: 0.00035
+  }
+];
+
+let liveExpeditionMeshes = [];
+
+function initLiveExpeditions() {
+  if (!liveExpeditionsGroup) return;
+  liveExpeditionsGroup.clear();
+  liveExpeditionMeshes = [];
+
+  liveExpeditionTeams.forEach(team => {
+    const group = new THREE.Group();
+
+    // 1. Moving Team Pin Head (Glowing Sphere)
+    const pinGeo = new THREE.SphereGeometry(0.09, 16, 16);
+    const pinMat = new THREE.MeshBasicMaterial({ color: team.color });
+    const pin = new THREE.Mesh(pinGeo, pinMat);
+    group.add(pin);
+
+    // 2. Pulsing Radar Ring
+    const ringGeo = new THREE.RingGeometry(0.12, 0.22, 24);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: team.color,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.75
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    group.add(ring);
+
+    // 3. Floating Holographic Billboard Label
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 80;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'rgba(7, 11, 20, 0.88)';
+    ctx.strokeStyle = `#${team.color.toString(16).padStart(6, '0')}`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(4, 4, 248, 72, 16);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(team.name, 128, 34);
+
+    ctx.font = '15px monospace';
+    ctx.fillStyle = `#${team.color.toString(16).padStart(6, '0')}`;
+    ctx.fillText(team.status, 128, 60);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.scale.set(1.4, 0.45, 1.0);
+    group.add(sprite);
+
+    liveExpeditionsGroup.add(group);
+    liveExpeditionMeshes.push({ team, group, pin, ring, sprite });
+  });
+}
+
+function updateLiveExpeditions() {
+  if (!liveExpeditionsGroup) return;
+  const time = Date.now() * 0.001;
+
+  liveExpeditionMeshes.forEach(item => {
+    item.team.progress = (item.team.progress + item.team.speed) % 1.0;
+    const coords = item.team.coords;
+    const numSegments = coords.length - 1;
+    const totalT = item.team.progress * numSegments;
+    const segIdx = Math.floor(totalT);
+    const segFrac = totalT - segIdx;
+
+    const pA = coords[segIdx];
+    const pB = coords[(segIdx + 1) % coords.length];
+
+    const curLat = pA.lat + (pB.lat - pA.lat) * segFrac;
+    const curLon = pA.lon + (pB.lon - pA.lon) * segFrac;
+
+    const pos = latLonToVector3(curLat, curLon, 5.08);
+    item.group.position.copy(pos);
+
+    // Orient pulse ring to face outward from planet center
+    item.ring.lookAt(new THREE.Vector3(0, 0, 0));
+    const s = 1.0 + Math.sin(time * 4.0) * 0.35;
+    item.ring.scale.set(s, s, s);
+
+    // Position sprite slightly above the pin
+    const spritePos = latLonToVector3(curLat, curLon, 5.35);
+    item.sprite.position.copy(spritePos.sub(pos));
+  });
+}
+
 // Render NASA HiRISE / Rover Surface Hazard Zones in 3D
 function renderHazardZones() {
   hazardsGroup.clear();
@@ -1592,7 +1737,12 @@ function animate() {
   }
 
   controls.update();
+  updateLiveExpeditions();
   renderer.render(scene, camera);
+
+  if (state.viewMode === '2d') {
+    renderFlatMap();
+  }
 }
 
 // ==========================================================================
@@ -1823,6 +1973,50 @@ function renderFlatMap() {
       ctx.fillStyle = '#ff6d00';
       ctx.font = 'bold 9px Share Tech Mono';
       ctx.fillText(`📷 ${p.rover} (Sol ${p.sol})`, x + 8, y + 4);
+    });
+  }
+
+  // 7. Draw Live Moving Expedition Teams (Astronauts Walking & Exploring)
+  if (liveExpeditionTeams) {
+    const time = Date.now() * 0.003;
+    liveExpeditionTeams.forEach(team => {
+      const coords = team.coords;
+      const numSegments = coords.length - 1;
+      const totalT = team.progress * numSegments;
+      const segIdx = Math.floor(totalT);
+      const segFrac = totalT - segIdx;
+      const pA = coords[segIdx];
+      const pB = coords[(segIdx + 1) % coords.length];
+      const curLat = pA.lat + (pB.lat - pA.lat) * segFrac;
+      const curLon = pA.lon + (pB.lon - pA.lon) * segFrac;
+
+      const px = (curLon / 360) * w;
+      const py = ((90 - curLat) / 180) * h;
+
+      const hexCol = `#${team.color.toString(16).padStart(6, '0')}`;
+      const pulseR = 8 + Math.sin(time * 3.5) * 4;
+
+      ctx.strokeStyle = hexCol;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(px, py, pulseR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = hexCol;
+      ctx.beginPath();
+      ctx.arc(px, py, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Label callout
+      ctx.fillStyle = 'rgba(7, 11, 20, 0.9)';
+      ctx.strokeStyle = hexCol;
+      ctx.lineWidth = 1;
+      ctx.fillRect(px + 8, py - 11, 168, 16);
+      ctx.strokeRect(px + 8, py - 11, 168, 16);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 9px monospace';
+      ctx.fillText(team.name, px + 12, py + 1);
     });
   }
 

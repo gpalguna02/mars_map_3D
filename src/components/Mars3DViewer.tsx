@@ -5,7 +5,7 @@ import { LayerState, RouteData, SectorId, Waypoint, Hazard } from '../types';
 import { getElevation, getSlope, SECTORS } from '../utils/terrain';
 import { getSolarState } from '../utils/solarTracking';
 import { Plotted3DMarker } from '../utils/sqlEngine';
-import { MapPin, Navigation, Globe, Eye, Zap, Radio, X, Plus, Target, CheckCircle2, RotateCcw } from 'lucide-react';
+import { MapPin, Navigation, Globe, Eye, Zap, Radio, X, Plus, Target, CheckCircle2, RotateCcw, Play, Pause, FastForward, Users, Camera, Footprints, Truck } from 'lucide-react';
 import { missionAudio } from '../utils/audio';
 
 interface Mars3DViewerProps {
@@ -41,7 +41,36 @@ export const Mars3DViewer: React.FC<Mars3DViewerProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // View mode: 'tactical' (high-res surface DEM) vs 'globe' (planetary 3D sphere)
-  const [viewMode, setViewMode] = useState<'tactical' | 'globe'>('globe');
+  const [viewMode, setViewMode] = useState<'tactical' | 'globe'>('tactical');
+
+  // Expedition Crew Traversal Simulation State
+  const [crewPlaying, setCrewPlaying] = useState<boolean>(true);
+  const [crewSpeed, setCrewSpeed] = useState<number>(1.0);
+  const [chaseCam, setChaseCam] = useState<boolean>(false);
+  const [selectedCrewMember, setSelectedCrewMember] = useState<'vance' | 'chen' | 'rover'>('vance');
+  const activeCurveRef = useRef<THREE.CatmullRomCurve3 | null>(null);
+  const crewProgressRef = useRef<number>(0);
+  const crewGroupRef = useRef<THREE.Group>(new THREE.Group());
+  const crewMembersRef = useRef<{
+    vance?: any;
+    chen?: any;
+    rover?: any;
+  }>({});
+
+  const crewPlayingRef = useRef<boolean>(crewPlaying);
+  crewPlayingRef.current = crewPlaying;
+
+  const crewSpeedRef = useRef<number>(crewSpeed);
+  crewSpeedRef.current = crewSpeed;
+
+  const chaseCamRef = useRef<boolean>(chaseCam);
+  chaseCamRef.current = chaseCam;
+
+  const selectedCrewMemberRef = useRef<'vance' | 'chen' | 'rover'>(selectedCrewMember);
+  selectedCrewMemberRef.current = selectedCrewMember;
+
+  const viewModeRef = useRef<'tactical' | 'globe'>(viewMode);
+  viewModeRef.current = viewMode;
 
   // Three.js References
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -179,6 +208,7 @@ export const Mars3DViewer: React.FC<Mars3DViewerProps> = ({
     scene.add(sqlMarkersGroupRef.current);
     scene.add(hazardsGroupRef.current);
     scene.add(globeGroupRef.current);
+    scene.add(crewGroupRef.current);
 
     // Hover marker on route
     const hoverGeo = new THREE.SphereGeometry(0.7, 16, 16);
@@ -217,6 +247,76 @@ export const Mars3DViewer: React.FC<Mars3DViewerProps> = ({
         }
       });
 
+      // Update Expedition Crew (Multiple Astronauts & Companion Rover walking on Mars)
+      if (activeCurveRef.current && crewPlayingRef.current && viewModeRef.current === 'tactical') {
+        const delta = Math.min(clock.getDelta(), 0.05);
+        const curCurve = activeCurveRef.current;
+        const curSpeed = crewSpeedRef.current;
+
+        crewProgressRef.current = (crewProgressRef.current + delta * 0.016 * curSpeed) % 1.0;
+        const members = crewMembersRef.current;
+
+        if (members.vance && members.chen && members.rover) {
+          // 1. Commander Vance (Lead Astronaut)
+          const t1 = crewProgressRef.current;
+          const pos1 = curCurve.getPointAt(t1);
+          const tan1 = curCurve.getTangentAt(t1).normalize();
+          members.vance.rootGroup.position.copy(pos1);
+          members.vance.rootGroup.lookAt(pos1.clone().add(tan1));
+
+          const walkVance = elapsedTime * 6.5 * curSpeed;
+          members.vance.leftLeg.rotation.x = Math.sin(walkVance) * 0.45;
+          members.vance.rightLeg.rotation.x = -Math.sin(walkVance) * 0.45;
+          members.vance.leftArm.rotation.x = -Math.sin(walkVance) * 0.35;
+          members.vance.rightArm.rotation.x = Math.sin(walkVance) * 0.35;
+          members.vance.torsoGroup.position.y = 0.95 + Math.abs(Math.sin(walkVance * 2)) * 0.04;
+
+          // 2. Dr. Chen (Second Person / Geologist walking alongside in buddy formation)
+          const t2 = (crewProgressRef.current - 0.035 + 1.0) % 1.0;
+          const pos2 = curCurve.getPointAt(t2);
+          const tan2 = curCurve.getTangentAt(t2).normalize();
+          const side2 = new THREE.Vector3(-tan2.z, 0, tan2.x).multiplyScalar(1.2);
+          const chenPos = pos2.clone().add(side2);
+          members.chen.rootGroup.position.copy(chenPos);
+          members.chen.rootGroup.lookAt(chenPos.clone().add(tan2));
+
+          const walkChen = (elapsedTime + 0.35) * 6.5 * curSpeed;
+          members.chen.leftLeg.rotation.x = Math.sin(walkChen) * 0.45;
+          members.chen.rightLeg.rotation.x = -Math.sin(walkChen) * 0.45;
+          members.chen.leftArm.rotation.x = -Math.sin(walkChen) * 0.35;
+          members.chen.rightArm.rotation.x = Math.sin(walkChen) * 0.35;
+          members.chen.torsoGroup.position.y = 0.95 + Math.abs(Math.sin(walkChen * 2)) * 0.04;
+
+          // 3. Rover Mule (Autonomous 4-wheeler following behind)
+          const t3 = (crewProgressRef.current - 0.075 + 1.0) % 1.0;
+          const pos3 = curCurve.getPointAt(t3);
+          const tan3 = curCurve.getTangentAt(t3).normalize();
+          members.rover.rootGroup.position.copy(pos3);
+          members.rover.rootGroup.lookAt(pos3.clone().add(tan3));
+
+          members.rover.wheels.forEach((w: THREE.Mesh) => {
+            w.rotation.x += delta * 12.0 * curSpeed;
+          });
+          members.rover.camHead.rotation.y = Math.sin(elapsedTime * 1.5) * 0.4;
+
+          // Third-Person Follow Camera (Chase Cam)
+          if (chaseCamRef.current && cameraRef.current && controlsRef.current) {
+            let focusObj = members.vance.rootGroup;
+            if (selectedCrewMemberRef.current === 'chen') focusObj = members.chen.rootGroup;
+            else if (selectedCrewMemberRef.current === 'rover') focusObj = members.rover.rootGroup;
+
+            const charPos = focusObj.position.clone();
+            const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(focusObj.quaternion).normalize();
+
+            const lookTarget = charPos.clone().add(new THREE.Vector3(0, 1.4, 0)).add(forward.clone().multiplyScalar(1.5));
+            const desiredCamPos = charPos.clone().sub(forward.clone().multiplyScalar(6.5)).add(new THREE.Vector3(0, 3.2, 0));
+
+            cameraRef.current.position.lerp(desiredCamPos, 0.08);
+            controlsRef.current.target.lerp(lookTarget, 0.1);
+          }
+        }
+      }
+
       controls.update();
       renderer.render(scene, camera);
     };
@@ -238,6 +338,290 @@ export const Mars3DViewer: React.FC<Mars3DViewerProps> = ({
       renderer.dispose();
     };
   }, []);
+
+  // Procedural 3D Astronaut Model Generator (Animated walking limbs, helmet visor, headlights & HUD badge)
+  const buildAstronautMesh = (accentColor: number, callsign: string, subtext: string) => {
+    const group = new THREE.Group();
+
+    const suitMat = new THREE.MeshStandardMaterial({
+      color: 0xededed,
+      roughness: 0.6,
+      metalness: 0.1
+    });
+    const accentMat = new THREE.MeshStandardMaterial({
+      color: accentColor,
+      roughness: 0.4,
+      metalness: 0.25
+    });
+    const visorMat = new THREE.MeshStandardMaterial({
+      color: 0xffaa00,
+      roughness: 0.05,
+      metalness: 0.95,
+      emissive: 0x332200,
+      emissiveIntensity: 0.4
+    });
+    const darkMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b,
+      roughness: 0.8
+    });
+
+    // Torso Group
+    const torsoGroup = new THREE.Group();
+    torsoGroup.position.y = 0.95;
+
+    const torsoGeo = new THREE.CylinderGeometry(0.32, 0.28, 0.65, 12);
+    const torsoMesh = new THREE.Mesh(torsoGeo, suitMat);
+    torsoMesh.castShadow = true;
+    torsoGroup.add(torsoMesh);
+
+    // Chest pack
+    const chestGeo = new THREE.BoxGeometry(0.24, 0.22, 0.12);
+    const chestMesh = new THREE.Mesh(chestGeo, accentMat);
+    chestMesh.position.set(0, 0.05, 0.24);
+    torsoGroup.add(chestMesh);
+
+    // PLSS Backpack
+    const packGeo = new THREE.BoxGeometry(0.42, 0.6, 0.28);
+    const packMesh = new THREE.Mesh(packGeo, suitMat);
+    packMesh.position.set(0, 0.05, -0.26);
+    packMesh.castShadow = true;
+    torsoGroup.add(packMesh);
+
+    // Antenna with beacon
+    const antGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.45, 6);
+    const antMesh = new THREE.Mesh(antGeo, darkMat);
+    antMesh.position.set(0.14, 0.45, -0.26);
+    torsoGroup.add(antMesh);
+
+    const beaconGeo = new THREE.SphereGeometry(0.04, 8, 8);
+    const beaconMat = new THREE.MeshBasicMaterial({ color: accentColor });
+    const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
+    beaconMesh.position.set(0.14, 0.68, -0.26);
+    torsoGroup.add(beaconMesh);
+
+    // Helmet
+    const helmetGeo = new THREE.SphereGeometry(0.26, 16, 16);
+    const helmetMesh = new THREE.Mesh(helmetGeo, suitMat);
+    helmetMesh.position.y = 0.52;
+    torsoGroup.add(helmetMesh);
+
+    // Visor
+    const visorGeo = new THREE.SphereGeometry(0.22, 16, 12, 0, Math.PI);
+    const visorMesh = new THREE.Mesh(visorGeo, visorMat);
+    visorMesh.rotation.y = -Math.PI / 2;
+    visorMesh.rotation.x = 0.1;
+    visorMesh.position.set(0, 0.52, 0.08);
+    torsoGroup.add(visorMesh);
+
+    // Headlight
+    const headlamp = new THREE.SpotLight(0xffffff, 2.5, 18, Math.PI / 4, 0.4);
+    headlamp.position.set(0, 0.55, 0.2);
+    const lampTarget = new THREE.Object3D();
+    lampTarget.position.set(0, 0, 5);
+    torsoGroup.add(lampTarget);
+    headlamp.target = lampTarget;
+    torsoGroup.add(headlamp);
+
+    // Arms
+    const armGeo = new THREE.CylinderGeometry(0.08, 0.07, 0.55, 8);
+    armGeo.translate(0, -0.25, 0);
+
+    const leftArmGroup = new THREE.Group();
+    leftArmGroup.position.set(-0.36, 0.22, 0);
+    const leftArmMesh = new THREE.Mesh(armGeo, suitMat);
+    leftArmMesh.castShadow = true;
+    leftArmGroup.add(leftArmMesh);
+    const leftGlove = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), darkMat);
+    leftGlove.position.y = -0.52;
+    leftArmGroup.add(leftGlove);
+    torsoGroup.add(leftArmGroup);
+
+    const rightArmGroup = new THREE.Group();
+    rightArmGroup.position.set(0.36, 0.22, 0);
+    const rightArmMesh = new THREE.Mesh(armGeo, suitMat);
+    rightArmMesh.castShadow = true;
+    rightArmGroup.add(rightArmMesh);
+    const rightGlove = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), darkMat);
+    rightGlove.position.y = -0.52;
+    rightArmGroup.add(rightGlove);
+    torsoGroup.add(rightArmGroup);
+
+    group.add(torsoGroup);
+
+    // Legs
+    const legGeo = new THREE.CylinderGeometry(0.1, 0.09, 0.65, 8);
+    legGeo.translate(0, -0.3, 0);
+
+    const bootGeo = new THREE.BoxGeometry(0.18, 0.14, 0.28);
+    bootGeo.translate(0, -0.62, 0.05);
+
+    const leftLegGroup = new THREE.Group();
+    leftLegGroup.position.set(-0.16, 0.7, 0);
+    const leftLegMesh = new THREE.Mesh(legGeo, suitMat);
+    leftLegMesh.castShadow = true;
+    leftLegGroup.add(leftLegMesh);
+    const leftBoot = new THREE.Mesh(bootGeo, darkMat);
+    leftLegGroup.add(leftBoot);
+    group.add(leftLegGroup);
+
+    const rightLegGroup = new THREE.Group();
+    rightLegGroup.position.set(0.16, 0.7, 0);
+    const rightLegMesh = new THREE.Mesh(legGeo, suitMat);
+    rightLegMesh.castShadow = true;
+    rightLegGroup.add(rightLegMesh);
+    const rightBoot = new THREE.Mesh(bootGeo, darkMat);
+    rightLegGroup.add(rightBoot);
+    group.add(rightLegGroup);
+
+    // Badge Sprite
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 96;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = 'rgba(7, 11, 20, 0.88)';
+    ctx.strokeStyle = accentColor === 0xff6b35 ? '#ff6b35' : '#00e5ff';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(6, 6, 244, 84, 18);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(callsign, 128, 40);
+
+    ctx.font = '16px monospace';
+    ctx.fillStyle = accentColor === 0xff6b35 ? '#ff9e7d' : '#38bdf8';
+    ctx.fillText(subtext, 128, 70);
+
+    const badgeTex = new THREE.CanvasTexture(canvas);
+    badgeTex.needsUpdate = true;
+    const badgeMat = new THREE.SpriteMaterial({ map: badgeTex, transparent: true, depthTest: false });
+    const badgeSprite = new THREE.Sprite(badgeMat);
+    badgeSprite.position.set(0, 2.3, 0);
+    badgeSprite.scale.set(2.8, 1.05, 1.0);
+    group.add(badgeSprite);
+
+    return {
+      rootGroup: group,
+      torsoGroup,
+      leftLeg: leftLegGroup,
+      rightLeg: rightLegGroup,
+      leftArm: leftArmGroup,
+      rightArm: rightArmGroup,
+      badge: badgeSprite
+    };
+  };
+
+  // Procedural 3D Companion Rover Model Generator
+  const buildRoverCompanionMesh = () => {
+    const group = new THREE.Group();
+
+    const chassisMat = new THREE.MeshStandardMaterial({
+      color: 0xd4d4d8,
+      roughness: 0.4,
+      metalness: 0.6
+    });
+    const goldMat = new THREE.MeshStandardMaterial({
+      color: 0xeab308,
+      roughness: 0.3,
+      metalness: 0.8
+    });
+    const wheelMat = new THREE.MeshStandardMaterial({
+      color: 0x18181b,
+      roughness: 0.85
+    });
+
+    const chassisGeo = new THREE.BoxGeometry(0.9, 0.35, 1.3);
+    const chassis = new THREE.Mesh(chassisGeo, chassisMat);
+    chassis.position.y = 0.45;
+    chassis.castShadow = true;
+    group.add(chassis);
+
+    const solarGeo = new THREE.BoxGeometry(0.82, 0.04, 1.1);
+    const solarMat = new THREE.MeshStandardMaterial({
+      color: 0x1e1b4b,
+      roughness: 0.2,
+      metalness: 0.8
+    });
+    const solar = new THREE.Mesh(solarGeo, solarMat);
+    solar.position.set(0, 0.65, 0);
+    group.add(solar);
+
+    const mastGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.6, 8);
+    const mast = new THREE.Mesh(mastGeo, chassisMat);
+    mast.position.set(0.25, 0.95, 0.4);
+    group.add(mast);
+
+    const camHeadGeo = new THREE.BoxGeometry(0.22, 0.12, 0.16);
+    const camHead = new THREE.Mesh(camHeadGeo, goldMat);
+    camHead.position.set(0.25, 1.25, 0.4);
+    group.add(camHead);
+
+    const wheelGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.16, 16);
+    wheelGeo.rotateZ(Math.PI / 2);
+    const wheels: THREE.Mesh[] = [];
+
+    const wheelPositions = [
+      [-0.55, 0.25, 0.45],
+      [0.55, 0.25, 0.45],
+      [-0.55, 0.25, -0.45],
+      [0.55, 0.25, -0.45]
+    ];
+
+    wheelPositions.forEach(([wx, wy, wz]) => {
+      const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+      wheel.position.set(wx, wy, wz);
+      wheel.castShadow = true;
+      wheels.push(wheel);
+      group.add(wheel);
+    });
+
+    const light = new THREE.SpotLight(0x00e5ff, 2.5, 15, Math.PI / 4, 0.5);
+    light.position.set(0, 0.5, 0.65);
+    const lTarget = new THREE.Object3D();
+    lTarget.position.set(0, 0, 5);
+    group.add(lTarget);
+    light.target = lTarget;
+    group.add(light);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 96;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = 'rgba(7, 11, 20, 0.88)';
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(6, 6, 244, 84, 18);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = 'bold 24px sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText('ROVER MULE', 128, 40);
+
+    ctx.font = '16px monospace';
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillText('AUTONOMOUS • 95% PWR', 128, 70);
+
+    const badgeTex = new THREE.CanvasTexture(canvas);
+    badgeTex.needsUpdate = true;
+    const badgeMat = new THREE.SpriteMaterial({ map: badgeTex, transparent: true, depthTest: false });
+    const badgeSprite = new THREE.Sprite(badgeMat);
+    badgeSprite.position.set(0, 1.8, 0);
+    badgeSprite.scale.set(2.8, 1.05, 1.0);
+    group.add(badgeSprite);
+
+    return {
+      rootGroup: group,
+      camHead,
+      wheels,
+      badge: badgeSprite
+    };
+  };
 
   // Build Procedural Mars 3D Globe with iconic landmarks
   const buildMarsGlobe = (group: THREE.Group) => {
@@ -391,6 +775,7 @@ export const Mars3DViewer: React.FC<Mars3DViewerProps> = ({
       losGroupRef.current.visible = false;
       sqlMarkersGroupRef.current.visible = false;
       hazardsGroupRef.current.visible = false;
+      crewGroupRef.current.visible = false;
 
       controlsRef.current.maxPolarAngle = Math.PI;
       cameraRef.current.position.set(0, 15, 60);
@@ -403,6 +788,7 @@ export const Mars3DViewer: React.FC<Mars3DViewerProps> = ({
       losGroupRef.current.visible = true;
       sqlMarkersGroupRef.current.visible = true;
       hazardsGroupRef.current.visible = true;
+      crewGroupRef.current.visible = true;
 
       controlsRef.current.maxPolarAngle = Math.PI / 2 - 0.05;
       cameraRef.current.position.set(0, 50, 70);
@@ -841,7 +1227,31 @@ export const Mars3DViewer: React.FC<Mars3DViewerProps> = ({
         const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
         tubeMesh.castShadow = true;
         routeGroup.add(tubeMesh);
+
+        activeCurveRef.current = curve;
+
+        // Spawn Expedition Crew (Multiple Astronauts & Companion Rover walking on Mars)
+        const crewGroup = crewGroupRef.current;
+        while (crewGroup.children.length > 0) crewGroup.remove(crewGroup.children[0]);
+
+        const vance = buildAstronautMesh(0xff6b35, 'CDR. VANCE', 'EVA SUIT • 98% O2');
+        const chen = buildAstronautMesh(0x00e5ff, 'DR. CHEN', 'GEOLOGIST • 99% O2');
+        const rover = buildRoverCompanionMesh();
+
+        crewGroup.add(vance.rootGroup);
+        crewGroup.add(chen.rootGroup);
+        crewGroup.add(rover.rootGroup);
+
+        crewMembersRef.current = { vance, chen, rover };
+      } else {
+        activeCurveRef.current = null;
+        while (crewGroupRef.current.children.length > 0) crewGroupRef.current.remove(crewGroupRef.current.children[0]);
+        crewMembersRef.current = {};
       }
+    } else {
+      activeCurveRef.current = null;
+      while (crewGroupRef.current.children.length > 0) crewGroupRef.current.remove(crewGroupRef.current.children[0]);
+      crewMembersRef.current = {};
     }
 
     // B. Render Waypoint Pins
@@ -1113,6 +1523,120 @@ export const Mars3DViewer: React.FC<Mars3DViewerProps> = ({
           <RotateCcw className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {/* Expedition Crew Traversal Floating Dock */}
+      {viewMode === 'tactical' && (
+        <div className="absolute top-20 right-6 z-20 flex flex-col gap-2 p-3 rounded-2xl bg-slate-950/80 border border-white/10 backdrop-blur-xl shadow-2xl shadow-black/60 font-sans max-w-xs text-xs text-slate-200">
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
+            <div className="flex items-center gap-1.5 font-bold text-white tracking-wide">
+              <Users className="w-4 h-4 text-orange-400" />
+              <span>EXPEDITION CREW</span>
+            </div>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              ACTIVE
+            </span>
+          </div>
+
+          {/* Crew Members List with Active Selection */}
+          <div className="grid grid-cols-3 gap-1.5">
+            <button
+              onClick={() => {
+                setSelectedCrewMember('vance');
+                missionAudio.playClick();
+              }}
+              className={`flex flex-col items-center p-1.5 rounded-xl border text-[10px] transition-all ${
+                selectedCrewMember === 'vance'
+                  ? 'bg-orange-500/20 border-orange-400 text-orange-300 font-semibold shadow-sm'
+                  : 'bg-white/5 border-white/5 text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-base">👨‍🚀</span>
+              <span>CDR. VANCE</span>
+              <span className="text-[8px] font-mono text-emerald-400">98% O2</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setSelectedCrewMember('chen');
+                missionAudio.playClick();
+              }}
+              className={`flex flex-col items-center p-1.5 rounded-xl border text-[10px] transition-all ${
+                selectedCrewMember === 'chen'
+                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-semibold shadow-sm'
+                  : 'bg-white/5 border-white/5 text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-base">👩‍🚀</span>
+              <span>DR. CHEN</span>
+              <span className="text-[8px] font-mono text-emerald-400">99% O2</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setSelectedCrewMember('rover');
+                missionAudio.playClick();
+              }}
+              className={`flex flex-col items-center p-1.5 rounded-xl border text-[10px] transition-all ${
+                selectedCrewMember === 'rover'
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-semibold shadow-sm'
+                  : 'bg-white/5 border-white/5 text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="text-base">🤖</span>
+              <span>ROVER MULE</span>
+              <span className="text-[8px] font-mono text-amber-400">95% PWR</span>
+            </button>
+          </div>
+
+          {/* Controls: Play/Pause, Speed, Chase Cam */}
+          <div className="flex items-center justify-between pt-1 gap-2 border-t border-white/10">
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  setCrewPlaying(prev => !prev);
+                  missionAudio.playClick();
+                }}
+                className={`p-1.5 rounded-full border transition-colors ${
+                  crewPlaying
+                    ? 'bg-orange-500 text-white border-orange-400 shadow-md shadow-orange-500/30'
+                    : 'bg-white/10 text-slate-300 border-white/10 hover:text-white'
+                }`}
+                title={crewPlaying ? 'Pause Expedition Traversal' : 'Play Expedition Traversal'}
+              >
+                {crewPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+              </button>
+
+              <button
+                onClick={() => {
+                  const nextSpeed = crewSpeed === 1.0 ? 2.0 : crewSpeed === 2.0 ? 4.0 : 1.0;
+                  setCrewSpeed(nextSpeed);
+                  missionAudio.playClick();
+                }}
+                className="px-2 py-1 rounded-full bg-white/5 border border-white/10 font-mono text-[10px] text-cyan-300 hover:bg-white/10"
+                title="Expedition Walk Speed"
+              >
+                {crewSpeed}x SPEED
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setChaseCam(prev => !prev);
+                missionAudio.playClick();
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[10px] font-medium transition-all ${
+                chaseCam
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold shadow-md shadow-cyan-500/30'
+                  : 'bg-white/5 text-slate-300 border-white/10 hover:text-white'
+              }`}
+              title="Third-Person Follow Camera (Follow Walking Astronauts)"
+            >
+              <Camera className="w-3 h-3" />
+              <span>{chaseCam ? 'FOLLOWING' : 'CHASE CAM'}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Hover Telemetry HUD Tooltip */}
       {hoverInfo && !selectedMarker && viewMode === 'tactical' && (
