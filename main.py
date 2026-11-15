@@ -44,6 +44,16 @@ class TraverseRequest(BaseModel):
     rover_mode: Optional[str] = Field("ASTRONAUT_EVA", description="ASTRONAUT_EVA or UNCREWED_ROVER")
 
 # Base API Endpoints
+@app.get("/api/health")
+def get_health():
+    """Health check endpoint for mission control HUD and reverse proxy."""
+    return {
+        "status": "healthy",
+        "system": "Sol Nav Surface Navigation OS",
+        "port": 8000,
+        "operational": True
+    }
+
 @app.get("/api/status")
 def get_system_status():
     """Telemetry heartbeat and active geodetic datum info."""

@@ -108,7 +108,7 @@ export const TopNav: React.FC<TopNavProps> = ({
         <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-[10px] font-mono">
           <span className={`w-2 h-2 rounded-full ${backendOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
           <span className={backendOnline ? 'text-emerald-300 font-semibold' : 'text-slate-500'}>
-            {backendOnline ? 'BACKEND LINK :3001' : 'STANDALONE MODE'}
+            {backendOnline ? 'BACKEND LINK :3001 [ACTIVE]' : 'STANDALONE MODE'}
           </span>
         </div>
       </div>
