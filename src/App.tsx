@@ -273,7 +273,7 @@ export const App: React.FC = () => {
       )}
 
       {/* 5. Central 3D Mars Surface Canvas */}
-      <main className="w-full h-full">
+      <main className="absolute inset-0 w-full h-full overflow-hidden">
         <Mars3DViewer
           sector={sector}
           layerState={layerState}

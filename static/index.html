@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SOL NAV // 3D Martian Surface EVA & Planetary GIS Navigation</title>
   
-  <!-- Modern Aerospace Typography -->
+  <!-- Modern High-End Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
   
   <!-- Core Styling -->
   <link rel="stylesheet" href="/static/styles.css">
@@ -19,18 +19,13 @@
 </head>
 <body class="aerospace-theme">
 
-  <!-- HUD Grid Overlay -->
-  <div class="hud-scanlines"></div>
-  <div class="hud-vignette"></div>
-
-  <!-- Top Mission Control Header -->
+  <!-- Floating Glassmorphic Mission Bar -->
   <header class="mission-header">
     <div class="header-left">
       <div class="mission-branding">
-        <div class="logo-glyph">⬡</div>
+        <span class="mars-orb-pulse"></span>
         <div class="logo-text">
-          <h1>SOL NAV <span class="badge-eva">3D MARS</span></h1>
-          <p class="subtitle">MARTIAN SURFACE & PLANETARY GIS EXPLORER</p>
+          <h1>MARS <span class="badge-eva">3D</span></h1>
         </div>
       </div>
     </div>
@@ -39,25 +34,24 @@
     <div class="header-center">
       <!-- 3D Globe vs Full Map -->
       <div class="view-mode-selector">
-        <button id="btn-view-3d" class="btn-mode active" title="3D Interactive Globe">🌐 3D GLOBE</button>
-        <button id="btn-view-2d" class="btn-mode" title="Full Mars 2D Equirectangular Map">🗺️ FULL MARS MAP</button>
+        <button id="btn-view-3d" class="btn-mode active" title="3D Interactive Globe">🌐 3D Globe</button>
+        <button id="btn-view-2d" class="btn-mode" title="Full Mars 2D Equirectangular Map">🗺️ 2D Map</button>
       </div>
 
       <!-- Basemap Texture Selector -->
       <div class="basemap-header-group">
-        <button class="btn-basemap btn-basemap-hdr active" data-map="viking" title="NASA Viking MDIM 2.1 True Color">VIKING COLOR</button>
-        <button class="btn-basemap btn-basemap-hdr" data-map="mola" title="MOLA Hypsometric Elevation Rainbow">MOLA ELEVATION</button>
-        <button class="btn-basemap btn-basemap-hdr" data-map="themis" title="THEMIS IR Shaded Relief">THEMIS RELIEF</button>
+        <button class="btn-basemap btn-basemap-hdr active" data-map="viking" title="NASA Viking MDIM 2.1 True Color">True Color</button>
+        <button class="btn-basemap btn-basemap-hdr" data-map="mola" title="MOLA Hypsometric Elevation Rainbow">Elevation</button>
+        <button class="btn-basemap btn-basemap-hdr" data-map="themis" title="THEMIS IR Shaded Relief">Relief</button>
       </div>
 
       <!-- Quick Fly-To Presets -->
       <div class="target-quick-nav">
-        <span class="nav-label">FLY TO:</span>
-        <button class="btn-preset active" data-preset="global">FULL PLANET</button>
-        <button class="btn-preset" data-preset="olympus">OLYMPUS MONS</button>
-        <button class="btn-preset" data-preset="valles">VALLES MARINERIS</button>
-        <button class="btn-preset" data-preset="jezero">JEZERO DELTA</button>
-        <button class="btn-preset" data-preset="gale">GALE CRATER</button>
+        <button class="btn-preset active" data-preset="global">🌍 Full Planet</button>
+        <button class="btn-preset" data-preset="olympus">🌋 Olympus Mons</button>
+        <button class="btn-preset" data-preset="valles">🏜️ Valles Marineris</button>
+        <button class="btn-preset" data-preset="jezero">🚀 Jezero Delta</button>
+        <button class="btn-preset" data-preset="gale">🔭 Gale Crater</button>
       </div>
     </div>
 
@@ -65,16 +59,16 @@
     <div class="header-right">
       <div class="tool-toggles">
         <button id="btn-toggle-tools" class="hud-btn" title="Toggle Scientific USGS GIS & Traverse Sidebars (Keyboard: H)">
-          <span class="btn-icon">🛠️</span> MISSION TOOLS
+          <span class="btn-icon">🛠️</span> Tools
         </button>
         <button id="btn-toggle-sun" class="hud-btn" title="Toggle Sun Angle Simulator">
-          <span class="btn-icon">☀️</span> SUN SIM
+          <span class="btn-icon">☀️</span> Sun
         </button>
         <button id="btn-toggle-measure" class="hud-btn" title="Measure Distance & Crater Diameter">
-          <span class="btn-icon">📏</span> MEASURE
+          <span class="btn-icon">📏</span> Measure
         </button>
-        <button id="btn-reset-cam" class="hud-btn" title="Reset Camera View to Full Planet">
-          <span class="btn-icon">↺</span> RESET
+        <button id="btn-reset-cam" class="hud-btn btn-icon-only" title="Reset Camera View to Full Planet">
+          <span class="btn-icon">↺</span>
         </button>
       </div>
     </div>

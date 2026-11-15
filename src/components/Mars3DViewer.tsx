@@ -322,7 +322,7 @@ export const Mars3DViewer: React.FC<Mars3DViewerProps> = ({
       `
     });
 
-    const globeMesh = new THREE.Mesh(globeGeo, globeMat);
+    const globeMesh = new THREE.Mesh<THREE.BufferGeometry, THREE.Material>(globeGeo, globeMat);
     group.add(globeMesh);
 
     // Load Authentic NASA Mars Viking Map Texture
